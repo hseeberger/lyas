@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+
+sbt 'set mainClass.in(Compile, run):= Some("de.heikoseeberger.lyas.SseServerApp")' run
