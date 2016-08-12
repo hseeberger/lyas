@@ -65,7 +65,10 @@ object SseClient {
         send(request).flatMap(Unmarshal(_).to[Source[ServerSentEvent, Any]])
       }
       def handle(events: Source[ServerSentEvent, Any]) =
-        events.runWith(handler)
+        events
+          .viaMat(new LastElement)(Keep.right)
+          .toMat(handler)(Keep.both)
+          .run()
       Flow[Option[String]].mapAsync(1)(get).map(handle)
     }
 
@@ -74,7 +77,16 @@ object SseClient {
       ???
 
     // Graph with shape SourceShape[A]
-    Source.single(lastEventId).via(getAndHandleEvents)
+    Source.fromGraph(GraphDSL.create() { implicit builder =>
+      import GraphDSL.Implicits._
+      val trigger = builder.add(Source.single(lastEventId))
+      val unzip   = builder.add(Unzip[Future[Option[ServerSentEvent]], A])
+      // format: OFF
+      trigger ~> getAndHandleEvents ~> unzip.in
+                                       unzip.out0 ~> Sink.ignore
+      // format: ON
+      SourceShape(unzip.out1)
+    })
   }
 }
 
