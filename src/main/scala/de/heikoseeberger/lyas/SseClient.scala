@@ -32,7 +32,7 @@ import akka.stream.scaladsl.{
 }
 import akka.stream.{ Materializer, SourceShape }
 import de.heikoseeberger.akkasse.MediaTypes.`text/event-stream`
-import de.heikoseeberger.akkasse.ServerSentEvent
+import de.heikoseeberger.akkasse.{ EventStreamUnmarshalling, ServerSentEvent }
 import de.heikoseeberger.akkasse.headers.`Last-Event-ID`
 import scala.concurrent.{ ExecutionContext, Future }
 
@@ -43,10 +43,19 @@ import scala.concurrent.{ ExecutionContext, Future }
   */
 object SseClient {
 
-  def apply[A](uri: Uri,
-               handler: Sink[ServerSentEvent, A],
-               send: HttpRequest => Future[HttpResponse],
-               lastEventId: Option[String] = None): Source[A, NotUsed] = {
-    ???
+  def apply[A](
+      uri: Uri,
+      handler: Sink[ServerSentEvent, A],
+      send: HttpRequest => Future[HttpResponse],
+      lastEventId: Option[String] = None
+  )(implicit ec: ExecutionContext, mat: Materializer): Source[A, NotUsed] = {
+    val events = {
+      import EventStreamUnmarshalling._
+      send(Get(uri).addHeader(Accept(`text/event-stream`)))
+        .flatMap(Unmarshal(_).to[Source[ServerSentEvent, Any]])
+    }
+    Source.single(
+      Source.fromFuture(events).flatMapConcat(identity).runWith(handler)
+    )
   }
 }
