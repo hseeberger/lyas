@@ -17,7 +17,9 @@
 package de.heikoseeberger.lyas
 
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.Source
+import akka.http.scaladsl.Http
+import akka.http.scaladsl.model.Uri
+import akka.stream.scaladsl.{ Sink, Source }
 import akka.stream.{ ActorMaterializer, ThrottleMode }
 import scala.concurrent.Await
 import scala.concurrent.duration.{ Duration, DurationInt }
@@ -44,14 +46,23 @@ object LyasApp {
     implicit val mat    = ActorMaterializer()
     import system.dispatcher
 
-    Source
-      .repeat("Learn you Akka Streams for great Good!")
-      .zip(Source.fromIterator(() => Iterator.from(0)))
-      .take(7)
-      .mapConcat { case (s, n) => f"${ " " * n }$s%n" }
-      .throttle(42, 1.second, 0, ThrottleMode.Shaping)
-      .runForeach(print)
-      .onComplete(_ => system.terminate())
+//    Source
+//      .repeat("Learn you Akka Streams for great Good!")
+//      .zip(Source.fromIterator(() => Iterator.from(0)))
+//      .take(7)
+//      .mapConcat { case (s, n) => f"${ " " * n }$s%n" }
+//      .throttle(42, 1.second, 0, ThrottleMode.Shaping)
+//      .runForeach(print)
+//      .onComplete(_ => system.terminate())
+
+    val config  = system.settings.config
+    val address = config.getString("lyas.sse-server.address")
+    val port    = config.getInt("lyas.sse-server.port")
+
+    val client = SseClient(Uri(s"http://$address:$port"),
+                           Sink.foreach(println),
+                           Http().singleRequest(_))
+    client.runWith(Sink.ignore)
 
     Await.ready(system.whenTerminated, Duration.Inf)
   }
