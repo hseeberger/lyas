@@ -61,7 +61,8 @@ object LyasApp {
 
     val client = SseClient(Uri(s"http://$address:$port"),
                            Sink.foreach(println),
-                           Http().singleRequest(_))
+                           Http().singleRequest(_),
+                           Some("10"))
     client.runWith(Sink.ignore)
 
     Await.ready(system.whenTerminated, Duration.Inf)

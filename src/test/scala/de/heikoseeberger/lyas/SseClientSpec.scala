@@ -35,11 +35,16 @@ class SseClientSpec extends BaseSpec {
         def append(ds: Vector[String], e: ServerSentEvent) = ds :+ e.data
         Sink.fold(Vector.empty[String])(append)
       }
-      SseClient(Uri(s"http://$address:$port"), handler, send)
+      SseClient(Uri(s"http://$address:$port"), handler, send, Some("10"))
         .take(nrOfProbes)
         .mapAsync(1)(identity)
         .runFold(Vector.empty[String])(_ ++ _)
-        .map(_ shouldBe 1.to(nrOfEvents * nrOfProbes).map(n => s"SSE-$n"))
+        .map(
+          _ shouldBe 1
+            .to(nrOfEvents * nrOfProbes)
+            .map(_ + 10)
+            .map(n => s"SSE-$n")
+        )
     }
   }
 
