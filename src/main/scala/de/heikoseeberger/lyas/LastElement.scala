@@ -33,7 +33,42 @@ import scala.concurrent.{ Future, Promise }
 final class LastElement[A]
     extends GraphStageWithMaterializedValue[FlowShape[A, A], Future[Option[A]]] {
 
-  override val shape = ???
+  override val shape =
+    FlowShape(Inlet[A]("lastElement.in"), Outlet[A]("lastElement.out"))
 
-  override def createLogicAndMaterializedValue(attributes: Attributes) = ???
+  override def createLogicAndMaterializedValue(attributes: Attributes) = {
+
+    val matValue = Promise[Option[A]]()
+
+    val logic = new GraphStageLogic(shape) {
+      import shape._
+
+      private var currentElement = Option.empty[A]
+
+      setHandler(in, new InHandler {
+
+        override def onPush() = {
+          val element = grab(in)
+          currentElement = Some(element)
+          push(out, element)
+        }
+
+        override def onUpstreamFinish() = {
+          matValue.success(currentElement)
+          super.onUpstreamFinish()
+        }
+
+        override def onUpstreamFailure(t: Throwable) = {
+          matValue.success(currentElement)
+          super.onUpstreamFinish()
+        }
+      })
+
+      setHandler(out, new OutHandler {
+        override def onPull() = pull(in)
+      })
+    }
+
+    (logic, matValue.future)
+  }
 }
