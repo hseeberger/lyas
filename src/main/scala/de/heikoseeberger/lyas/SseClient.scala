@@ -51,8 +51,11 @@ object SseClient {
   )(implicit ec: ExecutionContext, mat: Materializer): Source[A, NotUsed] = {
     val events = {
       import EventStreamUnmarshalling._
-      send(Get(uri).addHeader(Accept(`text/event-stream`)))
-        .flatMap(Unmarshal(_).to[Source[ServerSentEvent, Any]])
+      val request = {
+        val r = Get(uri).addHeader(Accept(`text/event-stream`))
+        lastEventId.foldLeft(r)((r, i) => r.addHeader(`Last-Event-ID`(i)))
+      }
+      send(request).flatMap(Unmarshal(_).to[Source[ServerSentEvent, Any]])
     }
     Source.single(
       Source.fromFuture(events).flatMapConcat(identity).runWith(handler)
