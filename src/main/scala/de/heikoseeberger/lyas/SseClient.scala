@@ -58,14 +58,30 @@ object SseClient {
         }
         send(request).flatMap(Unmarshal(_).to[Source[ServerSentEvent, Any]])
       }
-      Source.fromFuture(events).flatMapConcat(identity).runWith(handler)
+      Source
+        .fromFuture(events)
+        .flatMapConcat(identity)
+        .viaMat(new LastElement)(Keep.right)
+        .toMat(handler)(Keep.both)
+        .run()
     }
     Source.fromGraph(GraphDSL.create() { implicit builder =>
       import GraphDSL.Implicits._
       val trigger         = builder.add(Source.single(lastEventId))
+      val merge           = builder.add(Merge[Option[String]](2))
       val eventsProcessor = builder.add(Flow[Option[String]].map(getAndHandle))
-      trigger ~> eventsProcessor
-      SourceShape(eventsProcessor.out)
+      val unzip           = builder.add(Unzip[Future[Option[ServerSentEvent]], A]())
+      val currLastEventId = builder.add(
+        Flow[Future[Option[ServerSentEvent]]]
+          .mapAsync(1)(identity)
+          .scan(lastEventId)((i, e) => e.flatMap(_.id).orElse(i))
+          .drop(1)
+      )
+      // format: OFF
+      trigger ~> merge ~> eventsProcessor ~> unzip.in
+                 merge <~ currLastEventId <~ unzip.out0
+      // format: ON
+      SourceShape(unzip.out1)
     })
   }
 }
