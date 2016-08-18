@@ -49,16 +49,23 @@ object SseClient {
       send: HttpRequest => Future[HttpResponse],
       lastEventId: Option[String] = None
   )(implicit ec: ExecutionContext, mat: Materializer): Source[A, NotUsed] = {
-    val events = {
-      import EventStreamUnmarshalling._
-      val request = {
-        val r = Get(uri).addHeader(Accept(`text/event-stream`))
-        lastEventId.foldLeft(r)((r, i) => r.addHeader(`Last-Event-ID`(i)))
+    def getAndHandle(lastEventId: Option[String]) = {
+      val events = {
+        import EventStreamUnmarshalling._
+        val request = {
+          val r = Get(uri).addHeader(Accept(`text/event-stream`))
+          lastEventId.foldLeft(r)((r, i) => r.addHeader(`Last-Event-ID`(i)))
+        }
+        send(request).flatMap(Unmarshal(_).to[Source[ServerSentEvent, Any]])
       }
-      send(request).flatMap(Unmarshal(_).to[Source[ServerSentEvent, Any]])
-    }
-    Source.single(
       Source.fromFuture(events).flatMapConcat(identity).runWith(handler)
-    )
+    }
+    Source.fromGraph(GraphDSL.create() { implicit builder =>
+      import GraphDSL.Implicits._
+      val trigger         = builder.add(Source.single(lastEventId))
+      val eventsProcessor = builder.add(Flow[Option[String]].map(getAndHandle))
+      trigger ~> eventsProcessor
+      SourceShape(eventsProcessor.out)
+    })
   }
 }
