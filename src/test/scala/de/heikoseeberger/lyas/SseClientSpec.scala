@@ -28,7 +28,7 @@ class SseClientSpec extends BaseSpec {
       val address    = "localhost"
       val port       = 12346
       val nrOfEvents = 7
-      val nrOfProbes = 1
+      val nrOfProbes = 10
       SseServer(address, port, 100, nrOfEvents)
 
       val handler = {
