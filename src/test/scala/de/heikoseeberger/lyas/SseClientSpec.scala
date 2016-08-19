@@ -30,7 +30,7 @@ class SseClientSpec extends BaseSpec {
       val address     = "localhost"
       val port        = 12346
       val lastEventId = 10
-      val nrOfProbes  = 1
+      val nrOfProbes  = 10
       val expected    = Text.substring(lastEventId + 1) + Text * (nrOfProbes - 1)
       SseServer(address, port, 100)
 
