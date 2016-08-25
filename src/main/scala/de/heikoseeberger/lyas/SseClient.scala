@@ -92,7 +92,14 @@ object SseClient {
 
     // Flow[Option[String], (Future[Option[ServerSentEvent]], A), NotUsed]
     def getAndHandleEvents = {
-      ???
+      def get(lastEventId: Option[String]) = {
+        import EventStreamUnmarshalling._
+        val request = Get(uri).addHeader(Accept(`text/event-stream`))
+        send(request).flatMap(Unmarshal(_).to[Source[ServerSentEvent, Any]])
+      }
+      def handle(events: Source[ServerSentEvent, Any]) =
+        events.runWith(handler)
+      Flow[Option[String]].mapAsync(1)(get).map(handle)
     }
 
     // Flow[Future[Option[ServerSentEvent]], Option[String], NotUsed]
@@ -100,7 +107,7 @@ object SseClient {
       ???
 
     // Graph with shape SourceShape[A]
-    ???
+    Source.single(lastEventId).via(getAndHandleEvents)
   }
 }
 
