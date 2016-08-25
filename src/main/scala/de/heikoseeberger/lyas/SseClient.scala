@@ -33,6 +33,7 @@ import akka.stream.scaladsl.{
   Unzip
 }
 import akka.stream.{ ActorMaterializer, Materializer, SourceShape }
+import akka.stream.scaladsl.Source
 import de.heikoseeberger.akkasse.{ EventStreamUnmarshalling, ServerSentEvent }
 import de.heikoseeberger.akkasse.MediaTypes.`text/event-stream`
 import de.heikoseeberger.akkasse.headers.`Last-Event-ID`
@@ -83,6 +84,8 @@ import scala.concurrent.{ Await, ExecutionContext, Future }
   */
 object SseClient {
 
+  private val noEvents = Future.successful(Source.empty[ServerSentEvent])
+
   def apply[A](
       uri: Uri,
       handler: Sink[ServerSentEvent, A],
@@ -92,7 +95,16 @@ object SseClient {
 
     // Flow[Option[String], (Future[Option[ServerSentEvent]], A), NotUsed]
     def getAndHandleEvents = {
-      ???
+      def getAndHandle(lastEventId: Option[String]) = {
+        import EventStreamUnmarshalling._
+        val request = Get(uri).addHeader(Accept(`text/event-stream`))
+        val events =
+          send(request)
+            .flatMap(Unmarshal(_).to[Source[ServerSentEvent, Any]])
+            .fallbackTo(noEvents)
+        Source.fromFuture(events).flatMapConcat(identity).runWith(handler)
+      }
+      Flow[Option[String]].map(getAndHandle)
     }
 
     // Flow[Future[Option[ServerSentEvent]], Option[String], NotUsed]
@@ -100,7 +112,7 @@ object SseClient {
       ???
 
     // Graph with shape SourceShape[A]
-    ???
+    Source.single(lastEventId).via(getAndHandleEvents)
   }
 }
 
