@@ -1,4 +1,4 @@
-import com.typesafe.sbt.GitPlugin
+import com.typesafe.sbt.{ GitPlugin, SbtNativePackager }
 import com.typesafe.sbt.GitPlugin.autoImport._
 import de.heikoseeberger.sbtheader.HeaderPlugin
 import de.heikoseeberger.sbtheader.HeaderPlugin.autoImport._
@@ -13,7 +13,11 @@ import sbt.plugins.JvmPlugin
 object Build extends AutoPlugin {
 
   override def requires =
-    JvmPlugin && HeaderPlugin && GitPlugin && ScalaFmtPlugin
+    JvmPlugin &&
+    HeaderPlugin &&
+    GitPlugin &&
+    ScalaFmtPlugin &&
+    SbtNativePackager
 
   override def trigger = allRequirements
 
