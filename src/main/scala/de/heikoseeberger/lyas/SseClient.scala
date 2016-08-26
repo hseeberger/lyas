@@ -97,7 +97,10 @@ object SseClient {
     def getAndHandleEvents = {
       def getAndHandle(lastEventId: Option[String]) = {
         import EventStreamUnmarshalling._
-        val request = Get(uri).addHeader(Accept(`text/event-stream`))
+        val request = {
+          val r = Get(uri).addHeader(Accept(`text/event-stream`))
+          lastEventId.foldLeft(r)((r, i) => r.addHeader(`Last-Event-ID`(i)))
+        }
         val events =
           send(request)
             .flatMap(Unmarshal(_).to[EventStream])
