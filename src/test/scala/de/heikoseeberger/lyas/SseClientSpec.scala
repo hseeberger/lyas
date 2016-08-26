@@ -27,10 +27,11 @@ class SseClientSpec extends BaseSpec {
 
   "SseClient" should {
     "get and handle an event stream" in {
-      val address    = "localhost"
-      val port       = 12346
-      val nrOfProbes = 10
-      val expected   = Text
+      val address     = "localhost"
+      val port        = 12346
+      val lastEventId = 10
+      val nrOfProbes  = 1
+      val expected    = Text.substring(lastEventId + 1) + Text * (nrOfProbes - 1)
       SseServer(address, port, 100)
 
       val handler = {
@@ -39,7 +40,8 @@ class SseClientSpec extends BaseSpec {
       }
       SseClient(Uri(s"http://$address:$port"),
                 handler,
-                Http().singleRequest(_))
+                Http().singleRequest(_),
+                Some(lastEventId.toString))
         .take(nrOfProbes)
         .mapAsync(1)(identity)
         .runFold("")(_ + _)
