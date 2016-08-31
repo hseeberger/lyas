@@ -74,16 +74,20 @@ object SseClient {
 
     // Flow[Future[Option[ServerSentEvent]], Option[String], NotUsed]
     def currentLastEventId =
-      ???
+      Flow[Future[Option[ServerSentEvent]]]
+        .mapAsync(1)(identity)
+        .scan(lastEventId)((i, e) => e.flatMap(_.id).orElse(i))
+        .drop(1)
 
     // Graph with shape SourceShape[A]
     Source.fromGraph(GraphDSL.create() { implicit builder =>
       import GraphDSL.Implicits._
       val trigger = builder.add(Source.single(lastEventId))
+      val merge   = builder.add(Merge[Option[String]](2))
       val unzip   = builder.add(Unzip[Future[Option[ServerSentEvent]], A])
       // format: OFF
-      trigger ~> getAndHandleEvents ~> unzip.in
-                                       unzip.out0 ~> Sink.ignore
+      trigger ~> merge ~> getAndHandleEvents ~> unzip.in
+                 merge <~ currentLastEventId <~ unzip.out0
       // format: ON
       SourceShape(unzip.out1)
     })
