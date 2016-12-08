@@ -94,8 +94,18 @@ object EventSource {
   def apply(uri: Uri,
             send: HttpRequest => Future[HttpResponse],
             lastEventId: Option[String] = None)(
-      implicit mat: Materializer): EventSource =
-    ???
+      implicit mat: Materializer): EventSource = {
+    def getEventSource() = {
+      import EventStreamUnmarshalling._
+      import mat.executionContext
+      val request = Get(uri).addHeader(Accept(`text/event-stream`))
+      send(request).flatMap(Unmarshal(_).to[EventSource]).fallbackTo(noEvents)
+    }
+    Source
+      .single(lastEventId)
+      .mapAsync(1)(_ => getEventSource())
+      .flatMapConcat(identity)
+  }
 }
 
 object EventSourceApp {
