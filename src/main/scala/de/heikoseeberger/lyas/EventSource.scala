@@ -123,15 +123,22 @@ object EventSource {
         .map(enrichWithLastEventId)
     }
 
+    val currentLastEventId =
+      Flow[Future[Option[String]]]
+        .mapAsync(1)(identity) // There can only be one request in flight
+        .scan(lastEventId)((prev, current) => current.orElse(prev))
+        .drop(1)
+
     Source.fromGraph(GraphDSL.create() { implicit builder =>
       import GraphDSL.Implicits._
       val trigger = builder.add(Source.single(lastEventId))
+      val merge   = builder.add(Merge[Option[String]](2))
       val unzip   = builder.add(Unzip[EventSource, Future[Option[String]]]())
       val flatten = builder.add(Flow[EventSource].flatMapConcat(identity))
       // format: OFF
-                                 unzip.out0 ~> flatten
-      trigger ~> eventSources ~> unzip.in
-                                 unzip.out1 ~> Sink.ignore
+                                                unzip.out0 ~> flatten
+      trigger ~> merge ~>    eventSources    ~> unzip.in
+                 merge <~ currentLastEventId <~ unzip.out1
       // format: ON
       SourceShape(flatten.out)
     })
