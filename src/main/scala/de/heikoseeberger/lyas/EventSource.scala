@@ -99,13 +99,16 @@ object EventSource {
     import mat.executionContext
 
     val eventSources = {
-      def getEventSource() = {
-        val request = Get(uri).addHeader(Accept(`text/event-stream`))
+      def getEventSource(lastEventId: Option[String]) = {
+        val request = {
+          val r = Get(uri).addHeader(Accept(`text/event-stream`))
+          lastEventId.foldLeft(r)((r, i) => r.addHeader(`Last-Event-ID`(i)))
+        }
         send(request)
           .flatMap(Unmarshal(_).to[EventSource])
           .fallbackTo(noEvents)
       }
-      Flow[Option[String]].mapAsync(1)(_ => getEventSource())
+      Flow[Option[String]].mapAsync(1)(getEventSource)
     }
 
     Source.single(lastEventId).via(eventSources).flatMapConcat(identity)
