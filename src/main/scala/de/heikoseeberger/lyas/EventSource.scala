@@ -95,19 +95,44 @@ object EventSource {
             send: HttpRequest => Future[HttpResponse],
             lastEventId: Option[String] = None)(
       implicit mat: Materializer): EventSource = {
-    def getEventSource(lastEventId: Option[String]) = {
-      import EventStreamUnmarshalling._
-      import mat.executionContext
-      val request = {
-        val r = Get(uri).addHeader(Accept(`text/event-stream`))
-        lastEventId.foldLeft(r)((r, i) => r.addHeader(`Last-Event-ID`(i)))
+    import mat.executionContext
+
+    val eventSources = {
+      def getEventSource(lastEventId: Option[String]) = {
+        import EventStreamUnmarshalling._
+        val request = {
+          val r = Get(uri).addHeader(Accept(`text/event-stream`))
+          lastEventId.foldLeft(r)((r, i) => r.addHeader(`Last-Event-ID`(i)))
+        }
+        send(request)
+          .flatMap(Unmarshal(_).to[EventSource])
+          .fallbackTo(noEvents)
       }
-      send(request).flatMap(Unmarshal(_).to[EventSource]).fallbackTo(noEvents)
+      def enrichWithLastEvent(eventSource: EventSource) = {
+        val p = Promise[Option[String]]()
+        val enriched =
+          eventSource.alsoToMat(Sink.lastOption) {
+            case (m, f) =>
+              p.completeWith(f.map(_.flatMap(_.id)))
+              m
+          }
+        (enriched, p.future)
+      }
+      Flow[Option[String]].mapAsync(1)(getEventSource).map(enrichWithLastEvent)
     }
-    Source
-      .single(lastEventId)
-      .mapAsync(1)(getEventSource)
-      .flatMapConcat(identity)
+
+    Source.fromGraph(GraphDSL.create() { implicit builder =>
+      import GraphDSL.Implicits._
+      val trigger = builder.add(Source.single(lastEventId))
+      val unzip   = builder.add(Unzip[EventSource, Future[Option[String]]]())
+      val flatten = builder.add(Flow[EventSource].flatMapConcat(identity))
+      // format: OFF
+                                 unzip.out0 ~> flatten
+      trigger ~> eventSources ~> unzip.in
+                                 unzip.out1 ~> Sink.ignore
+      // format: ON
+      SourceShape(flatten.out)
+    })
   }
 }
 
