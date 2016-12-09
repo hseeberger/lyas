@@ -108,15 +108,30 @@ object EventSource {
           .flatMap(Unmarshal(_).to[EventSource])
           .fallbackTo(noEvents)
       }
-      Flow[Option[String]].mapAsync(1)(getEventSource)
+      def enrichWithLastEventId(eventSource: EventSource) = {
+        val p = Promise[Option[String]]()
+        val enriched =
+          eventSource.alsoToMat(Sink.lastOption) {
+            case (m, f) =>
+              p.completeWith(f.map(_.flatMap(_.id)))
+              m
+          }
+        (enriched, p.future)
+      }
+      Flow[Option[String]]
+        .mapAsync(1)(getEventSource)
+        .map(enrichWithLastEventId)
     }
 
     Source.fromGraph(GraphDSL.create() { implicit builder =>
       import GraphDSL.Implicits._
       val trigger = builder.add(Source.single(lastEventId))
+      val unzip   = builder.add(Unzip[EventSource, Future[Option[String]]]())
       val flatten = builder.add(Flow[EventSource].flatMapConcat(identity))
       // format: OFF
-      trigger ~> eventSources ~> flatten
+                                 unzip.out0 ~> flatten
+      trigger ~> eventSources ~> unzip.in
+                                 unzip.out1 ~> Sink.ignore
       // format: ON
       SourceShape(flatten.out)
     })
