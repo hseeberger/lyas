@@ -111,7 +111,15 @@ object EventSource {
       Flow[Option[String]].mapAsync(1)(getEventSource)
     }
 
-    Source.single(lastEventId).via(eventSources).flatMapConcat(identity)
+    Source.fromGraph(GraphDSL.create() { implicit builder =>
+      import GraphDSL.Implicits._
+      val trigger = builder.add(Source.single(lastEventId))
+      val flatten = builder.add(Flow[EventSource].flatMapConcat(identity))
+      // format: OFF
+      trigger ~> eventSources ~> flatten
+      // format: ON
+      SourceShape(flatten.out)
+    })
   }
 }
 
