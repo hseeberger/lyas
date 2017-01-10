@@ -18,7 +18,7 @@ package de.heikoseeberger.lyas
 
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.{ Sink, Source }
+import akka.stream.scaladsl.{ Keep, Sink, Source }
 
 /**
   * Prints "Learn you Akka Streams for great good!" in fancy ways.
@@ -30,10 +30,12 @@ object Main {
 
     implicit val system = ActorSystem()
     implicit val mat    = ActorMaterializer()
+    import system.dispatcher
 
     Source
       .single("Learn you Akka Streams for great good!")
-      .to(Sink.foreach(println))
+      .toMat(Sink.foreach(println))(Keep.right)
       .run()
+      .onComplete(_ => system.terminate())
   }
 }
