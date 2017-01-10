@@ -33,7 +33,8 @@ object Main {
     import system.dispatcher
 
     Source
-      .single("Learn you Akka Streams for great good!")
+      .repeat("Learn you Akka Streams for great good!")
+      .take(7)
       .toMat(Sink.foreach(println))(Keep.right)
       .run()
       .onComplete(_ => system.terminate())
