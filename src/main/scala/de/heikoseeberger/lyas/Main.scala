@@ -35,7 +35,13 @@ object Main {
     Source
       .repeat("Learn you Akka Streams for great good!")
       .take(7)
-      .toMat(Sink.foreach(println))(Keep.right)
+      .zip(Source.fromIterator(() => Iterator.from(0)))
+      .map {
+        case (s, n) =>
+          val i = " " * n
+          f"$i$s%n"
+      }
+      .toMat(Sink.foreach(print))(Keep.right)
       .run()
       .onComplete(_ => system.terminate())
   }
