@@ -5,12 +5,13 @@
 lazy val lyas =
   project
     .in(file("."))
-    .enablePlugins(AutomateHeaderPlugin, GitVersioning)
+    .enablePlugins(AutomateHeaderPlugin, GitVersioning, JavaAppPackaging, DockerPlugin)
     .settings(settings)
     .settings(
       libraryDependencies ++= Seq(
-        library.scalaCheck % Test,
-        library.scalaTest  % Test
+        library.akkaStream,
+        library.akkaStreamTestkit % Test,
+        library.scalaTest         % Test
       )
     )
 
@@ -21,11 +22,12 @@ lazy val lyas =
 lazy val library =
   new {
     object Version {
-      val scalaCheck = "1.13.4"
-      val scalaTest  = "3.0.1"
+      val akka      = "2.5.3"
+      val scalaTest = "3.0.3"
     }
-    val scalaCheck = "org.scalacheck" %% "scalacheck" % Version.scalaCheck
-    val scalaTest  = "org.scalatest"  %% "scalatest"  % Version.scalaTest
+    val akkaStream        = "com.typesafe.akka" %% "akka-stream"         % Version.akka
+    val akkaStreamTestkit = "com.typesafe.akka" %% "akka-stream-testkit" % Version.akka
+    val scalaTest         = "org.scalatest"     %% "scalatest"           % Version.scalaTest
 }
 
 // *****************************************************************************
@@ -34,19 +36,17 @@ lazy val library =
 
 lazy val settings =
   commonSettings ++
-  scalafmtSettings ++
   gitSettings ++
-  headerSettings
+  scalafmtSettings ++
+  dockerSettings
 
 lazy val commonSettings =
   Seq(
-    scalaVersion := "2.12.1",
-    crossScalaVersions := Seq(scalaVersion.value, "2.11.8"),
+    scalaVersion := "2.12.2",
     organization := "de.heikoseeberger",
-    licenses += ("Apache 2.0",
-                 url("http://www.apache.org/licenses/LICENSE-2.0")),
-    mappings.in(Compile, packageBin) +=
-      baseDirectory.in(ThisBuild).value / "LICENSE" -> "LICENSE",
+    organizationName := "Heiko Seeberger",
+    startYear := Some(2017),
+    licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0")),
     scalacOptions ++= Seq(
       "-unchecked",
       "-deprecation",
@@ -54,34 +54,33 @@ lazy val commonSettings =
       "-target:jvm-1.8",
       "-encoding", "UTF-8"
     ),
-    javacOptions ++= Seq(
-      "-source", "1.8",
-      "-target", "1.8"
-    ),
-    unmanagedSourceDirectories.in(Compile) :=
-      Seq(scalaSource.in(Compile).value),
-    unmanagedSourceDirectories.in(Test) :=
-      Seq(scalaSource.in(Test).value)
+    unmanagedSourceDirectories.in(Compile) := Seq(scalaSource.in(Compile).value),
+    unmanagedSourceDirectories.in(Test) := Seq(scalaSource.in(Test).value),
+    publishArtifact.in(Compile, packageDoc) := false,
+    publishArtifact.in(Compile, packageSrc) := false,
+    shellPrompt in ThisBuild := { state =>
+      val project = Project.extract(state).currentRef.project
+      s"[$project]> "
+    }
 )
-
-lazy val scalafmtSettings =
-  reformatOnCompileSettings ++
-  Seq(
-    formatSbtFiles := false,
-    scalafmtConfig :=
-      Some(baseDirectory.in(ThisBuild).value / ".scalafmt.conf"),
-    ivyScala :=
-      ivyScala.value.map(_.copy(overrideScalaVersion = sbtPlugin.value)) // TODO Remove once this workaround no longer needed (https://github.com/sbt/sbt/issues/2786)!
-  )
 
 lazy val gitSettings =
   Seq(
     git.useGitDescribe := true
   )
 
-import de.heikoseeberger.sbtheader.HeaderPattern
-import de.heikoseeberger.sbtheader.license.Apache2_0
-lazy val headerSettings =
+lazy val scalafmtSettings =
   Seq(
-    headers := Map("scala" -> Apache2_0("2017", "Heiko Seeberger"))
+    scalafmtOnCompile := true,
+    scalafmtVersion := "1.0.0-RC4"
+  )
+
+lazy val dockerSettings =
+  Seq(
+    daemonUser.in(Docker) := "root",
+    maintainer.in(Docker) := "Heiko Seeberger",
+    version.in(Docker) := "latest",
+    dockerBaseImage := "openjdk:8",
+    dockerExposedPorts := Vector(8000),
+    dockerRepository := Some("hseeberger")
   )
