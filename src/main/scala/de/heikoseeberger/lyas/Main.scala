@@ -17,7 +17,7 @@
 package de.heikoseeberger.lyas
 
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.{ Keep, Sink, Source }
+import akka.stream.scaladsl.{ Flow, Keep, Sink, Source }
 import akka.stream.{ ActorMaterializer, ThrottleMode }
 import scala.concurrent.duration.DurationInt
 
@@ -33,17 +33,28 @@ object Main {
     implicit val mat    = ActorMaterializer()
     import system.dispatcher
 
-    Source
-      .repeat("Learn you Akka Streams for great good!")
-      .take(7)
-      .zip(Source.fromIterator(() => Iterator.from(0)))
-      .mapConcat {
-        case (s, n) =>
-          val i = " " * n
-          f"$i$s%n"
-      }
-      .throttle(42, 1.second, 1, ThrottleMode.Shaping)
-      .toMat(Sink.foreach(print))(Keep.right)
+    val sevenLines =
+      Source
+        .repeat("Learn you Akka Streams for great good!")
+        .take(7)
+
+    val toCharsIndented =
+      Flow[String]
+        .zip(Source.fromIterator(() => Iterator.from(0)))
+        .mapConcat {
+          case (s, n) =>
+            val i = " " * n
+            f"$i$s%n"
+        }
+
+    val printThrottled =
+      Flow[Char]
+        .throttle(42, 1.second, 1, ThrottleMode.Shaping)
+        .toMat(Sink.foreach(print))(Keep.right)
+
+    sevenLines
+      .via(toCharsIndented)
+      .toMat(printThrottled)(Keep.right)
       .run()
       .onComplete(_ => system.terminate())
   }
