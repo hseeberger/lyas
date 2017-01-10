@@ -17,8 +17,9 @@
 package de.heikoseeberger.lyas
 
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{ Keep, Sink, Source }
+import akka.stream.{ ActorMaterializer, ThrottleMode }
+import scala.concurrent.duration.DurationInt
 
 /**
   * Prints "Learn you Akka Streams for great good!" in fancy ways.
@@ -36,11 +37,12 @@ object Main {
       .repeat("Learn you Akka Streams for great good!")
       .take(7)
       .zip(Source.fromIterator(() => Iterator.from(0)))
-      .map {
+      .mapConcat {
         case (s, n) =>
           val i = " " * n
           f"$i$s%n"
       }
+      .throttle(42, 1.second, 1, ThrottleMode.Shaping)
       .toMat(Sink.foreach(print))(Keep.right)
       .run()
       .onComplete(_ => system.terminate())
